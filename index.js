@@ -1,7 +1,12 @@
 const express = require('express')
 const app = express()
 const morgan = require('morgan')
+const bodyParser = require('body-parser');
+const { request } = require('express');
 
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms :reqBody'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan('tiny'))
 
 app.use(express.json())
@@ -83,6 +88,12 @@ app.delete('/api/persons/:id', (request, response) => {
 
     response.status(204).end()
 })
+morgan.token('reqBody', (request, response) => {
+    if (request.method === 'POST') {
+        return JSON.stringify(request.body);
+    }
+    return '';
+});
 
 const PORT = 3001
 app.listen(PORT, () => {
