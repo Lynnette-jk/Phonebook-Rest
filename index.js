@@ -56,15 +56,21 @@ app.get('/api/persons/:id', (request, response) => {
 })
 
 app.post('/api/persons', (request, response) => {
-    const maxId = persons.length > 0
-        ? Math.max(...persons.map(n => n.id))
-        : 0
-
     const person = request.body
+    if (!person.name || !person.number) {
+        return response.status(400).json({
+            error: 'name or number missing'
+        })
+    }
+    const existingPerson = persons.find(p => p.name === person.name)
+    if (existingPerson) {
+        return response.status(400).json({
+            error: 'name must be unique'
+        })
+    }
+    const maxId = persons.length > 0 ? Math.max(...persons.map(n => n.id)) : 0
     person.id = maxId + 1
-
     persons = persons.concat(person)
-
     response.json(person)
 })
 
