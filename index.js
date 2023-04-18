@@ -8,6 +8,7 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms :r
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan('tiny'))
+app.use(express.static('build'))
 
 app.use(express.json())
 
