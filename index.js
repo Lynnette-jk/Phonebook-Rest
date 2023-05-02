@@ -1,8 +1,25 @@
+require('dotenv').config()
 const express = require('express')
 const app = express()
 const morgan = require('morgan')
 const bodyParser = require('body-parser');
 const { request } = require('express');
+const mongoose = require('mongoose');
+const Person = require('./models/person')
+
+const password = process.argv[2]
+const url =
+  `mongodb+srv://fullstack:${password}@cluster0.kcvya7m.mongodb.net/test?retryWrites=true&w=majority`
+
+mongoose.set('strictQuery',false)
+mongoose.connect(url, { useNewUrlParser: true, useUnifiedTopology: true })
+
+const personSchema = new mongoose.Schema({
+  name: String,
+  number: String,
+})
+
+const Person = mongoose.model('Person', personSchema)
 
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :reqBody'));
 app.use(bodyParser.json());
@@ -11,6 +28,8 @@ app.use(morgan('tiny'))
 app.use(express.static('build'))
 
 app.use(express.json())
+
+app.use(requestLogger)
 
 let persons = [
     {
@@ -40,7 +59,9 @@ app.get('/', (request, response) => {
 })
 
 app.get('/api/persons', (request, response) => {
-    response.json(persons)
+    Person.find({}).then(persons => {
+        response.json(persons)
+    })
 })
 
 app.get('/info', (request, response) => {
@@ -52,24 +73,34 @@ app.get('/info', (request, response) => {
     response.send(`Phonebook has info for ${count} people. ${timestamp} ${timezone} (GMT${offset >= 0 ? '+' : '-'}${Math.abs(offset)})`);
 });
 
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id)
-
-    if (person) {
-        response.json(person)
-    } else {
-        response.status(404).end()
-    }
-})
+app.get('/api/persons/:id', (request, response, next) => {
+    Person.findById(request.params.id).then(person => {
+        if (person) {
+            response.json(person)
+          } else {
+            response.status(404).end()
+          }
+        })
+        .catch(error => next(error))
+    })
 
 app.post('/api/persons', (request, response) => {
-    const person = request.body
-    if (!person.name || !person.number) {
+    const body = request.body
+    if (!body.name || !body.number) {
         return response.status(400).json({
             error: 'name or number missing'
         })
     }
+    const person = new Person({
+        name: body.name,
+        number: body.number,
+      })
+    
+      person.save().then(savedPerson => {
+        response.json(savedPerson)
+      })
+    })
+
     const existingPerson = persons.find(p => p.name === person.name)
     if (existingPerson) {
         return response.status(400).json({
@@ -80,7 +111,6 @@ app.post('/api/persons', (request, response) => {
     person.id = maxId + 1
     persons = persons.concat(person)
     response.json(person)
-})
 
 
 app.delete('/api/persons/:id', (request, response) => {
@@ -89,12 +119,39 @@ app.delete('/api/persons/:id', (request, response) => {
 
     response.status(204).end()
 })
+
+personSchema.set('toJSON', {
+    transform: (document, returnedObject) => {
+      returnedObject.id = returnedObject._id.toString()
+      delete returnedObject._id
+      delete returnedObject.__v
+    }
+  }) 
+
 morgan.token('reqBody', (request, response) => {
     if (request.method === 'POST') {
         return JSON.stringify(request.body);
     }
     return '';
 });
+
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+  }
+
+app.use(unknownEndpoint)
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+  
+    if (error.name === 'CastError') {
+      return response.status(400).send({ error: 'malformatted id' })
+    } 
+  
+    next(error)
+  }
+  
+  // this has to be the last loaded middleware.
+app.use(errorHandler)
 
 const PORT = 3001
 app.listen(PORT, () => {
