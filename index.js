@@ -121,6 +121,21 @@ app.delete('/api/persons/:id', (request, response,next) => {
     .catch(error => next(error))
 })
 
+app.put('/api/persons/:id', (request, response, next) => {
+    const body = request.body
+  
+    const person = new Person({
+        name: body.name,
+        number: body.number,
+    })
+  
+    Person.findByIdAndUpdate(request.params.id, note, { new: true })
+      .then(updatedPerson => {
+        response.json(updatedPerson)
+      })
+      .catch(error => next(error))
+  })
+
 personSchema.set('toJSON', {
     transform: (document, returnedObject) => {
       returnedObject.id = returnedObject._id.toString()
