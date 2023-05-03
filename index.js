@@ -15,7 +15,11 @@ mongoose.set('strictQuery', false)
 mongoose.connect(url, { useNewUrlParser: true, useUnifiedTopology: true })
 
 const personSchema = new mongoose.Schema({
-    name: String,
+    name: {
+        type: String,
+        minlength: 3, // new validation added
+        required: true
+      },
     number: String,
 })
 
