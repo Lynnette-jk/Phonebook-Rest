@@ -9,17 +9,25 @@ const Person = require('./models/person')
 
 const password = process.argv[2]
 const url =
-  `mongodb+srv://fullstack:${password}@cluster0.kcvya7m.mongodb.net/test?retryWrites=true&w=majority`
+    `mongodb+srv://fullstack:${password}@cluster0.kcvya7m.mongodb.net/test?retryWrites=true&w=majority`
 
-mongoose.set('strictQuery',false)
+mongoose.set('strictQuery', false)
 mongoose.connect(url, { useNewUrlParser: true, useUnifiedTopology: true })
 
 const personSchema = new mongoose.Schema({
-  name: String,
-  number: String,
+    name: String,
+    number: String,
 })
 
-const Person = mongoose.model('Person', personSchema)
+personSchema.set('toJSON', {
+    transform: (document, returnedObject) => {
+        returnedObject.id = returnedObject._id.toString()
+        delete returnedObject._id
+        delete returnedObject.__v
+    }
+})
+
+module.exports = mongoose.model('Person', personSchema)
 
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :reqBody'));
 app.use(bodyParser.json());
@@ -28,6 +36,14 @@ app.use(morgan('tiny'))
 app.use(express.static('build'))
 
 app.use(express.json())
+
+const requestLogger = (request, response, next) => {
+    console.log('Method:', request.method);
+    console.log('Path:', request.path);
+    console.log('Body:', request.body);
+    console.log('---');
+    next();
+};
 
 app.use(requestLogger)
 
@@ -77,14 +93,23 @@ app.get('/api/persons/:id', (request, response, next) => {
     Person.findById(request.params.id).then(person => {
         if (person) {
             response.json(person)
-          } else {
+        } else {
             response.status(404).end()
-          }
+        }
+    })
+        .catch(error => next(error))
+})
+
+app.delete('/api/persons/:id', (request, response, next) => {
+    Person.findByIdAndRemove(request.params.id)
+        .then(result => {
+            response.status(204).end()
         })
         .catch(error => next(error))
-    })
+})
 
-app.post('/api/persons', (request, response) => {
+
+app.post('/api/persons', (request, response, next) => {
     const body = request.body
     if (!body.name || !body.number) {
         return response.status(400).json({
@@ -94,55 +119,37 @@ app.post('/api/persons', (request, response) => {
     const person = new Person({
         name: body.name,
         number: body.number,
-      })
-    
-      person.save().then(savedPerson => {
+    })
+
+    person.save().then(savedPerson => {
         response.json(savedPerson)
-      })
     })
-
-    const existingPerson = persons.find(p => p.name === person.name)
-    if (existingPerson) {
-        return response.status(400).json({
-            error: 'name must be unique'
-        })
-    }
-    const maxId = persons.length > 0 ? Math.max(...persons.map(n => n.id)) : 0
-    person.id = maxId + 1
-    persons = persons.concat(person)
-    response.json(person)
-
-
-app.delete('/api/persons/:id', (request, response,next) => {
-    Person.findByIdAndRemove(request.params.id)
-    .then(result => {
-      response.status(204).end()
-    })
-    .catch(error => next(error))
+        .catch(error => next(error))
 })
 
 app.put('/api/persons/:id', (request, response, next) => {
-    const body = request.body
-  
-    const person = new Person({
+    const body = request.body;
+    if (!body.name || !body.number) {
+        return response.status(400).json({ error: 'Name and number are required' });
+    }
+
+    const person = {
         name: body.name,
         number: body.number,
-    })
-  
-    Person.findByIdAndUpdate(request.params.id, note, { new: true })
-      .then(updatedPerson => {
-        response.json(updatedPerson)
-      })
-      .catch(error => next(error))
-  })
+    };
 
-personSchema.set('toJSON', {
-    transform: (document, returnedObject) => {
-      returnedObject.id = returnedObject._id.toString()
-      delete returnedObject._id
-      delete returnedObject.__v
-    }
-  }) 
+    Person.findByIdAndUpdate(request.params.id, person, { new: true })
+        .then((updatedPerson) => {
+            if (!updatedPerson) {
+                return response.status(404).json({ error: 'Person not found' });
+            }
+            response.json(updatedPerson);
+        })
+        .catch((error) => next(error));
+});
+
+
+
 
 morgan.token('reqBody', (request, response) => {
     if (request.method === 'POST') {
@@ -153,20 +160,20 @@ morgan.token('reqBody', (request, response) => {
 
 const unknownEndpoint = (request, response) => {
     response.status(404).send({ error: 'unknown endpoint' })
-  }
+}
 
 app.use(unknownEndpoint)
 const errorHandler = (error, request, response, next) => {
     console.error(error.message)
-  
+
     if (error.name === 'CastError') {
-      return response.status(400).send({ error: 'malformatted id' })
-    } 
-  
+        return response.status(400).send({ error: 'malformatted id' })
+    }
+
     next(error)
-  }
-  
-  // this has to be the last loaded middleware.
+}
+
+// this has to be the last loaded middleware.
 app.use(errorHandler)
 
 const PORT = 3001
