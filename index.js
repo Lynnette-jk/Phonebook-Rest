@@ -4,15 +4,24 @@ const app = express();
 const morgan = require("morgan");
 const bodyParser = require("body-parser");
 const { request } = require("express");
+const cors = require('cors');
 const mongoose = require("mongoose");
 const Person = require("./models/person");
+
+app.use(cors());
 
 const password = process.argv[2];
 const url = `mongodb+srv://fullstack:${password}@cluster0.kcvya7m.mongodb.net/test?retryWrites=true&w=majority`;
 
 mongoose.set("strictQuery", false);
-mongoose.connect(url, { useNewUrlParser: true, useUnifiedTopology: true });
-
+mongoose
+  .connect(url, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => {
+    console.log("Connected to MongoDB");
+  })
+  .catch((error) => {
+    console.log("Error connecting to MongoDB:", error.message);
+  });
 const personSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -39,7 +48,6 @@ personSchema.set("toJSON", {
   },
 });
 
-module.exports = mongoose.model("Person", personSchema);
 
 app.use(
   morgan(
@@ -47,6 +55,7 @@ app.use(
   )
 );
 app.use(bodyParser.json());
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan("tiny"));
 app.use(express.static("build"));
@@ -62,29 +71,6 @@ const requestLogger = (request, response, next) => {
 };
 
 app.use(requestLogger);
-
-let persons = [
-  {
-    id: 1,
-    name: "Arto Hellas",
-    number: "040-123456",
-  },
-  {
-    id: 2,
-    name: "Ada Lovelace",
-    number: "39-44-5323523",
-  },
-  {
-    id: 3,
-    name: "Dan Abramov",
-    number: "12-43-234345",
-  },
-  {
-    id: 4,
-    name: "Mary Poppendieck",
-    number: "39-23-6423122",
-  },
-];
 
 app.get("/", (request, response) => {
   response.send("<h1>Hello World!</h1>");
